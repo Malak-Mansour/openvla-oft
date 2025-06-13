@@ -846,6 +846,67 @@ def aloha_dataset_transform(trajectory: Dict[str, Any]) -> Dict[str, Any]:
     return trajectory
 
 
+def do_dataset_transform_delta(trajectory: Dict[str, Any]) -> Dict[str, Any]:
+    # Combine ee_states and gripper_states into full state
+    ee = trajectory["observation"]["ee_states"]             # shape (T, 6)
+    gripper = trajectory["observation"]["gripper_states"]   # shape (T, 1)
+    state = tf.concat([ee, gripper], axis=1)                # shape (T, 7)
+
+    # Compute delta action: state[t+1] - state[t]
+    state_t = tf.slice(state, [0, 0], [tf.shape(state)[0] - 1, -1])   # state[:-1]
+    state_t1 = tf.slice(state, [1, 0], [tf.shape(state)[0] - 1, -1])  # state[1:]
+    delta_action = state_t1 - state_t
+
+    # Pad final step with zeros
+    last_zero = tf.zeros((1, 7), dtype=delta_action.dtype)
+    delta_action = tf.concat([delta_action, last_zero], axis=0)
+
+    # DEBUG PRINTING (works in eager mode or if wrapped in tf.print)
+    # tf.print("=== STATE ===", state, summarize=-1)
+    # tf.print("=== STATE[t] ===", state_t, summarize=-1)
+    # tf.print("=== STATE[t+1] ===", state_t1, summarize=-1)
+    # tf.print("=== DELTA ACTION ===", delta_action, summarize=-1)
+
+    # Update trajectory
+    trajectory["action"] = delta_action
+    trajectory["observation"]["EEF_state"] = ee
+    trajectory["observation"]["gripper_state"] = gripper
+
+    return trajectory
+
+
+def do_dataset_transform_teleop(trajectory: Dict[str, Any]) -> Dict[str, Any]:
+    # Combine ee_states and gripper_states into full state
+
+    # Update trajectory
+    trajectory["action"] = trajectory["teleop_actions"]  # shape (T, 7)
+    trajectory["observation"]["EEF_state"] = trajectory["observation"]["ee_states"]             # shape (T, 6)
+    trajectory["observation"]["gripper_state"] = trajectory["observation"]["gripper_states"]   # shape (T, 1)
+
+    return trajectory
+
+
+def do_dataset_transform_next(trajectory: Dict[str, Any]) -> Dict[str, Any]:
+    # Combine ee_states and gripper_states into full state
+    ee = trajectory["observation"]["ee_states"]             # shape (T, 6)
+    gripper = trajectory["observation"]["gripper_states"]   # shape (T, 1)
+    state = tf.concat([ee, gripper], axis=1)                # shape (T, 7)
+
+    # Compute next action: state[t+1] 
+    next_action = tf.slice(state, [1, 0], [tf.shape(state)[0] - 1, -1])  # state[1:]
+
+    # Pad final step with zeros
+    last_zero = tf.zeros((1, 7), dtype=next_action.dtype)
+    next_action = tf.concat([next_action, last_zero], axis=0)
+
+    # Update trajectory
+    trajectory["action"] = next_action
+    trajectory["observation"]["EEF_state"] = ee
+    trajectory["observation"]["gripper_state"] = gripper
+
+    return trajectory
+
+
 # === Registry ===
 OXE_STANDARDIZATION_TRANSFORMS = {
     "bridge_oxe": bridge_oxe_dataset_transform,
@@ -930,4 +991,9 @@ OXE_STANDARDIZATION_TRANSFORMS = {
     "aloha1_fold_shirt_30_demos": aloha_dataset_transform,
     "aloha1_scoop_X_into_bowl_45_demos": aloha_dataset_transform,
     "aloha1_put_X_into_pot_300_demos": aloha_dataset_transform,
+    
+    "do_manual": do_dataset_transform_delta,
+    # "do_manual": do_dataset_transform_teleop,
+    # "do_manual": do_dataset_transform_next,
+
 }

@@ -112,7 +112,7 @@ class FinetuneConfig:
 
     # Logging
     wandb_entity: str = "your-wandb-entity"          # Name of WandB entity
-    wandb_project: str = "your-wandb-project"        # Name of WandB project
+    wandb_project: str = "openvla-oft"        # Name of WandB project
     run_id_note: Optional[str] = None                # Extra note to add to end of run ID for logging
     run_id_override: Optional[str] = None            # Optional string to override the run ID with
     wandb_log_freq: int = 10                         # WandB logging frequency in steps
@@ -166,6 +166,7 @@ def get_run_id(cfg) -> str:
             run_id = "--".join(run_id.split("--")[:-1])
     else:
         run_id = (
+            f"PRINT+"
             f"{cfg.vla_path.split('/')[-1]}+{cfg.dataset_name}"
             f"+b{cfg.batch_size * cfg.grad_accumulation_steps}"
             f"+lr-{cfg.learning_rate}"
@@ -1033,6 +1034,35 @@ def finetune(cfg: FinetuneConfig) -> None:
         vla.train()
         optimizer.zero_grad()
         for batch_idx, batch in enumerate(dataloader):
+
+            # import torchvision.transforms.functional as TF
+            # import gc
+
+            # if distributed_state.is_main_process and batch_idx % 100 == 0:
+            #     with torch.no_grad():
+            #         save_image_dir = os.path.join(run_dir, "debug_images")
+            #         os.makedirs(save_image_dir, exist_ok=True)
+
+            #         images = batch["pixel_values"]  # [B, 3*num_views, H, W]
+            #         B, C, H, W = images.shape
+            #         num_views = C // 3
+
+            #         for i in range(B):
+            #             img = images[i].cpu().float().clamp(0, 1)
+            #             for view_idx in range(num_views):
+            #                 view = img[view_idx * 3:(view_idx + 1) * 3]
+            #                 try:
+            #                     img_pil = TF.to_pil_image(view)
+            #                     img_path = os.path.join(save_image_dir, f"step{batch_idx}_img{i}_view{view_idx}.png")
+            #                     img_pil.save(img_path)
+            #                     print(f"Saved: {img_path}")
+            #                 except Exception as e:
+            #                     print(f"Failed to save img{i}_view{view_idx}: {e}")
+
+            #         gc.collect()
+            #         torch.cuda.empty_cache()
+
+
             # Compute training metrics and loss
             compute_diffusion_l1 = cfg.use_diffusion and batch_idx % cfg.diffusion_sample_freq == 0
             loss, metrics = run_forward_pass(
